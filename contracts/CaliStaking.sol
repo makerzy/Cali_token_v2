@@ -859,7 +859,7 @@ contract CaliStaking is Ownable, ReentrancyGuard {
     mapping(address => UserInfo) public getUserPoolInfo;
 
     address public immutable CaliTokenLP;
-    uint256 public duration = 60 days;
+    uint256 public duration;
     uint256 public startTime;
     ICaliToken public CaliToken;
 
@@ -867,6 +867,8 @@ contract CaliStaking is Ownable, ReentrancyGuard {
     uint256 public lastRewardBlock;
     uint256 public accruedCaliShare;
     uint256 public poolSupply;
+    uint256 public mintedReward;
+    uint256 public maxCap;
 
     uint256 public closetime = startTime.add(duration);
 
@@ -894,10 +896,12 @@ contract CaliStaking is Ownable, ReentrancyGuard {
         uint256 _lastRewardBlock
     );
 
-    function initialize() public onlyOwner {
+    function initialize(uint256 _duration, uint256 _maxCap) public onlyOwner {
         startBlock = _blockNumber();
         lastRewardBlock = _blockNumber();
         startTime = _timestamp();
+        duration = _duration;
+        maxCap = _maxCap;
         emit Initialized(_msgSender(), startBlock, lastRewardBlock);
     }
 
@@ -907,6 +911,13 @@ contract CaliStaking is Ownable, ReentrancyGuard {
 
     function _timestamp() internal view returns (uint256) {
         return block.timestamp;
+    }
+
+    function getCloseBlock() public view returns (uint256) {
+        uint256 timeDiff = getMultiplier(closetime, startTime);
+        uint256 averageBlockTime = 3;
+        uint256 closeBlock = startBlock.add(timeDiff.div(averageBlockTime));
+        return closeBlock;
     }
 
     function getMultiplier(uint256 _from, uint256 _to)
@@ -919,7 +930,7 @@ contract CaliStaking is Ownable, ReentrancyGuard {
 
     event UpdatePool(uint256 lastRwdBlock, uint256 accrShare);
 
-    function updatePool() public {
+    function updatePool() internal {
         if (_blockNumber() <= lastRewardBlock) {
             return;
         }
@@ -930,14 +941,18 @@ contract CaliStaking is Ownable, ReentrancyGuard {
             startTime = _timestamp();
             return;
         }
-        if (_timestamp() < closetime) {
-            uint256 multiplier = getMultiplier(lastRewardBlock, _blockNumber());
+        if (mintedReward < maxCap) {
+            uint256 blockNumber = _blockNumber() < getCloseBlock()
+                ? _blockNumber()
+                : getCloseBlock();
+            uint256 multiplier = getMultiplier(lastRewardBlock, blockNumber);
             uint256 tokenReward = multiplier.mul(caliPerBlock);
-            CaliToken.mint(address(this), tokenReward);
+            if (tokenReward > 0) CaliToken.mint(address(this), tokenReward);
+            mintedReward.add(tokenReward);
             accruedCaliShare = accruedCaliShare.add(
                 tokenReward.mul(1e12).div(lpSupply)
             );
-            lastRewardBlock = _blockNumber();
+            lastRewardBlock = blockNumber;
             emit UpdatePool(lastRewardBlock, accruedCaliShare);
         }
     }
@@ -946,8 +961,12 @@ contract CaliStaking is Ownable, ReentrancyGuard {
         UserInfo storage user = getUserPoolInfo[_user];
         uint256 accTokenPerShare = accruedCaliShare;
         uint256 lpSupply = poolSupply;
+        uint256 blockNumber = _blockNumber() < getCloseBlock()
+            ? _blockNumber()
+            : getCloseBlock();
+
         if (_blockNumber() > lastRewardBlock && lpSupply > 0) {
-            uint256 multiplier = getMultiplier(lastRewardBlock, _blockNumber());
+            uint256 multiplier = getMultiplier(lastRewardBlock, blockNumber);
             uint256 tokenReward = multiplier.mul(caliPerBlock);
             accTokenPerShare = accTokenPerShare.add(
                 tokenReward.mul(1e12).div(lpSupply)
