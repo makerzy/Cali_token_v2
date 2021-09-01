@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "dotenv": "^10.0.0",
+    "bignumber.js": "^9.0.1",
     "ether-time-traveler": "^1.1.0",
     "ethereumjs-util": "^7.0.10"
   }

@@ -870,10 +870,8 @@ contract CaliStaking is Ownable, ReentrancyGuard {
     uint256 public mintedReward;
     uint256 public maxCap;
 
-    uint256 public closetime = startTime.add(duration);
-
     modifier checkStakingOver() {
-        require(_timestamp() < closetime, "Staking is over");
+        require(_timestamp() < getCloseTime(), "Staking is over");
         _;
     }
 
@@ -897,27 +895,33 @@ contract CaliStaking is Ownable, ReentrancyGuard {
     );
 
     function initialize(uint256 _duration, uint256 _maxCap) public onlyOwner {
+        require(startBlock == 0 && lastRewardBlock == 0, "Initialized");
         startBlock = _blockNumber();
         lastRewardBlock = _blockNumber();
         startTime = _timestamp();
         duration = _duration;
         maxCap = _maxCap;
+
         emit Initialized(_msgSender(), startBlock, lastRewardBlock);
     }
 
-    function _blockNumber() internal view returns (uint256) {
+    function _blockNumber() public view returns (uint256) {
         return block.number;
     }
 
-    function _timestamp() internal view returns (uint256) {
+    function _timestamp() public view returns (uint256) {
         return block.timestamp;
     }
 
     function getCloseBlock() public view returns (uint256) {
-        uint256 timeDiff = getMultiplier(closetime, startTime);
+        uint256 timeDiff = getMultiplier(startTime, getCloseTime());
         uint256 averageBlockTime = 3;
         uint256 closeBlock = startBlock.add(timeDiff.div(averageBlockTime));
         return closeBlock;
+    }
+
+    function getCloseTime() public view returns (uint256) {
+        return startTime.add(duration);
     }
 
     function getMultiplier(uint256 _from, uint256 _to)
@@ -938,6 +942,7 @@ contract CaliStaking is Ownable, ReentrancyGuard {
         uint256 lpSupply = poolSupply;
         if (lpSupply == 0) {
             lastRewardBlock = _blockNumber();
+            startBlock = _blockNumber();
             startTime = _timestamp();
             return;
         }
@@ -948,7 +953,7 @@ contract CaliStaking is Ownable, ReentrancyGuard {
             uint256 multiplier = getMultiplier(lastRewardBlock, blockNumber);
             uint256 tokenReward = multiplier.mul(caliPerBlock);
             if (tokenReward > 0) CaliToken.mint(address(this), tokenReward);
-            mintedReward.add(tokenReward);
+            mintedReward = mintedReward.add(tokenReward);
             accruedCaliShare = accruedCaliShare.add(
                 tokenReward.mul(1e12).div(lpSupply)
             );

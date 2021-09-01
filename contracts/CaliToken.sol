@@ -233,8 +233,7 @@ contract Cali_V2 is ICaliERC20 {
 
     address[] private minters;
 
-    // uint public pendingDelay;
-    // uint public delayDelay;
+    address public stakingContract;
 
     uint256 public changeOwnerDelay;
     address public pendingOwner;
@@ -415,6 +414,13 @@ contract Cali_V2 is ICaliERC20 {
                 address(this)
             )
         );
+    }
+
+    function addStakingContract(address staking) external onlyOwner {
+        require(stakingContract == address(0), "staking set");
+        stakingContract = staking;
+        isMinter[stakingContract] = true;
+        minters.push(stakingContract);
     }
 
     function totalSupply() external view override returns (uint256) {
